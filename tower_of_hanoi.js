@@ -29,10 +29,43 @@ function Stack(size) {
         this.position -= 1;
         let value = this[this.position];
         return value;
-      }
+      },
+    },
+    'peek': {
+      'value': function() {
+        if (this.position > 0) {
+          return this[this.position-1];
+        }
+        return null;
+      },
     },
   });
   return stack;
+}
+
+function Modal(name,options) {
+  let template = document.querySelector(`#${name}`);
+  if (template === null) throw new Error(`Could not find modal ${name}`);
+  if (!options) options = {};
+
+  let html = template.innerHTML;
+  let regex = /\$[^\$\n]+\$/g;
+  let variables = html.match(regex);
+  if (variables !== null) {
+    for (let variable of variables) {
+      let name = variable.substr(1,variable.length-2);
+      html = html.replace(variable,name in options ? options[name] : '');
+    }
+  }
+
+  let newNode = document.createElement('template');
+  newNode.innerHTML = html;
+
+  let root = document.importNode(newNode.content,true);
+
+  document.querySelector('.container-modal').appendChild(root);
+
+  return root;
 }
 
 function App() {
@@ -145,10 +178,16 @@ function App() {
         }
       },
     },
+    '_acceptInput': {
+      'value': true,
+      'writable': true,
+      'enumerable': false,
+    },
     'buildTowers': {
       'value': function() {
         if (!isNaN(this.nRings) && !isNaN(this.nTowers)) {
           delete this.towers;
+          this.floating = null;
           this.towers = new Array(this.nTowers);
           for (let i=0;i<this.nTowers;i++) {
             let stack = Stack(this.nRings);
@@ -184,36 +223,41 @@ function App() {
     },
     'onKey': {
       'value': function(event) {
-        switch(event.keyCode) {
-          case 39:
-          case 68:
-          this.selected += 1;
-          break;
-          case 37:
-          case 65:
-          this.selected -= 1;
-          break;
-          case 13:
-          case 32:
-          case 38:
-          case 40:
-          case 87:
-          case 83:
-          if (this.floating !== null) {
-            let tower = this.towers[this.selected]
-            if (tower.position === 0 || (tower.position > 0 && tower[tower.position-1] > this.floating)) {
-              tower.add(this.floating);
-              this.floating = null;
+        if (this._acceptInput) {
+          switch(event.keyCode) {
+            case 39:
+            case 68:
+            this.selected += 1;
+            break;
+            case 37:
+            case 65:
+            this.selected -= 1;
+            break;
+            case 13:
+            case 32:
+            case 38:
+            case 40:
+            case 87:
+            case 83:
+            if (this.floating !== null) {
+              let tower = this.towers[this.selected]
+              if (tower.position === 0 || (tower.position > 0 && tower[tower.position-1] > this.floating)) {
+                tower.add(this.floating);
+                this.floating = null;
+              }
+            } else {
+              this.floating = this.towers[this.selected].remove();
             }
-          } else {
-            this.floating = this.towers[this.selected].remove();
+            // console.log(`Completed ${this.towers[this.nTowers-1].position}/${this.nRings}`);
+            if (this.towers[this.nTowers-1].position === this.nRings) {
+              // alert('Well done!');
+              // this.nRings += 1;
+              let cont = document.querySelector('.container-game');
+              cont.removeAttribute('completed');
+              requestAnimationFrame(() => { cont.setAttribute('completed','') });
+            }
+            break;
           }
-          // console.log(`Completed ${this.towers[this.nTowers-1].position}/${this.nRings}`);
-          if (this.towers[this.nTowers-1].position === this.nRings) {
-            alert('Well done!');
-            this.nRings += 1;
-          }
-          break;
         }
       },
     },
@@ -296,11 +340,78 @@ function App() {
         // this.context.fillText(frame,0,this.height);
       },
     },
+    'generateMoves': {
+      'value': function(n,source,dest,spare,moves) {
+        if (n > 0) {
+          this.generateMoves(n-1,source,spare,dest,moves);
+          moves.push(source);
+          moves.push(dest);
+          this.generateMoves(n-1,spare,dest,source,moves);
+        }
+      },
+    },
+    'play': {
+      'value': function() {
+        this._acceptInput = false;
+        this.buildTowers();
+        var moves = new Array();
+        this.generateMoves(this.nRings,0,2,1,moves);
+        var position = 0;
+        var app = this;
+        function playNext() {
+          if (position < moves.length && app._acceptInput === false) {
+            app.towers[moves[position+1]].add(app.towers[moves[position]].remove());
+            app._selected = moves[position+1];
+            position += 2;
+            setTimeout(playNext,200);
+          } else {
+            app._acceptInput = true;
+            document.querySelector('.overlay-auto').setAttribute('paused','');
+          }
+        }
+        playNext();
+      }
+    },
+    'stop': {
+      'value': function() {
+        this._acceptInput = true;
+      }
+    },
   });
   return app;
 }
 
 var _app = App().initialize(1000,500);
-document.querySelector('.overlay-settings').addEventListener('click',() => {
-  console.log('Click');
-});
+window.addEventListener('click',(e) => {
+  var prevent = 0;
+  e.target.classList.forEach((className) => {
+    switch(className) {
+      case 'overlay-settings':
+      console.log('Toggling settings overlay');
+      break;
+      case 'overlay-auto':
+      let paused = e.target.hasAttribute('paused');
+      if (paused) {
+        _app.play();
+        e.target.removeAttribute('paused');
+      } else {
+        _app.stop();
+        e.target.setAttribute('paused','');
+      }
+      break;
+      case 'overlay-plus':
+      _app.nRings += 1;
+      break;
+      case 'overlay-minus':
+      if (_app.nRings > 3) _app.nRings -= 1;
+      break;
+      case 'modal-background':
+      document.querySelector('.container-modal').innerHTML = '';
+      break;
+      default:
+      prevent += 1;
+      break;
+    }
+  })
+  if (prevent === e.target.classList.length) e.preventDefault();
+})
