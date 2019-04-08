@@ -186,12 +186,17 @@ function App() {
     'buildTowers': {
       'value': function() {
         if (!isNaN(this.nRings) && !isNaN(this.nTowers)) {
-          delete this.towers;
           this.floating = null;
+          if (this.nTowers === 3) this.minMoves = 2**this.nRings - 1;
+          else this.minMoves = null;
+          this.moves = 0;
+          this.playKey = 0;
+
+          delete this.towers;
           this.towers = new Array(this.nTowers);
           for (let i=0;i<this.nTowers;i++) {
             let stack = Stack(this.nRings);
-            if (i==0) {
+            if (i===0) {
               for (let j=1;j<=this.nRings;j++) {
                 stack.add(this.nRings-j);
               }
@@ -244,6 +249,7 @@ function App() {
               if (tower.position === 0 || (tower.position > 0 && tower[tower.position-1] > this.floating)) {
                 tower.add(this.floating);
                 this.floating = null;
+                this.moves += 1;
               }
             } else {
               this.floating = this.towers[this.selected].remove();
@@ -256,6 +262,9 @@ function App() {
               cont.removeAttribute('completed');
               requestAnimationFrame(() => { cont.setAttribute('completed','') });
             }
+            break;
+            case 82: // r
+            this.buildTowers();
             break;
           }
         }
@@ -322,7 +331,7 @@ function App() {
             if (this.selected === i && this.floating === null) {
                 if (j === this.towers[i].position-1) {
                   this.context.strokeStyle = '#ff0000';
-                  this.context.lineWidth = '1.5';
+                  this.context.lineWidth = '4';
                   this.context.strokeRect(left,top,sizes.rings[ring].width,sizes.rings[ring].height);
                 }
             }
@@ -337,7 +346,9 @@ function App() {
         }
 
         this.context.fillStyle = '#ffffff';
-        // this.context.fillText(frame,0,this.height);
+        this.context.textAlign = 'right';
+        this.context.font = '80pt consolas';
+        this.context.fillText(`${this.moves}/${this.minMoves}`,this.width,100);
       },
     },
     'generateMoves': {
@@ -352,18 +363,23 @@ function App() {
     },
     'play': {
       'value': function() {
+        document.querySelector('.container-loading').style.opacity = 1;
         this._acceptInput = false;
         this.buildTowers();
         var moves = new Array();
         this.generateMoves(this.nRings,0,2,1,moves);
+        document.querySelector('.container-loading').style.opacity = 0;
         var position = 0;
         var app = this;
+        var playKey = new Date().getTime();
+        app.playKey = playKey;
         function playNext() {
-          if (position < moves.length && app._acceptInput === false) {
+          if (app.playKey === playKey && position < moves.length && app._acceptInput === false) {
             app.towers[moves[position+1]].add(app.towers[moves[position]].remove());
             app._selected = moves[position+1];
             position += 2;
-            setTimeout(playNext,200);
+            app.moves += 1;
+            setTimeout(playNext,100);
           } else {
             app._acceptInput = true;
             document.querySelector('.overlay-auto').setAttribute('paused','');
@@ -381,7 +397,7 @@ function App() {
   return app;
 }
 
-var _app = App().initialize(1000,500);
+var _app = App().initialize(4000,4000);
 window.addEventListener('click',(e) => {
   var prevent = 0;
   e.target.classList.forEach((className) => {
