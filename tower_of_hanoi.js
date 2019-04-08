@@ -408,6 +408,8 @@ window.addEventListener('click',(e) => {
       case 'modal-background':
       document.querySelector('.container-modal').innerHTML = '';
       break;
+      case 'overlay-github':
+      break;
       default:
       prevent += 1;
       break;
