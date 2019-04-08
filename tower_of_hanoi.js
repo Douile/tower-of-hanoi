@@ -351,33 +351,28 @@ function App() {
         this.context.fillText(`${this.moves}/${this.minMoves}`,this.width,100);
       },
     },
-    'generateMoves': {
-      'value': function(n,source,dest,spare,moves) {
-        if (n > 0) {
-          this.generateMoves(n-1,source,spare,dest,moves);
-          moves.push(source);
-          moves.push(dest);
-          this.generateMoves(n-1,spare,dest,source,moves);
-        }
-      },
-    },
     'play': {
       'value': function() {
-        document.querySelector('.container-loading').style.opacity = 1;
+        function *moveGenerator(n,source,dest,spare) {
+          if (n > 0) {
+            yield * moveGenerator(n-1,source,spare,dest);
+            yield [ source,dest ];
+            yield * moveGenerator(n-1,spare,dest,source);
+          }
+        }
         this._acceptInput = false;
         this.buildTowers();
         var moves = new Array();
-        this.generateMoves(this.nRings,0,2,1,moves);
-        document.querySelector('.container-loading').style.opacity = 0;
-        var position = 0;
+        var generator = moveGenerator(this.nRings,0,2,1);
         var app = this;
         var playKey = new Date().getTime();
         app.playKey = playKey;
+
         function playNext() {
-          if (app.playKey === playKey && position < moves.length && app._acceptInput === false) {
-            app.towers[moves[position+1]].add(app.towers[moves[position]].remove());
-            app._selected = moves[position+1];
-            position += 2;
+          let move = generator.next();
+          if (app.playKey === playKey && !move.done && app._acceptInput === false) {
+            app.towers[move.value[1]].add(app.towers[move.value[0]].remove());
+            app._selected = move.value[1];
             app.moves += 1;
             setTimeout(playNext,100);
           } else {
